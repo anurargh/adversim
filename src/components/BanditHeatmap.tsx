@@ -5,9 +5,10 @@ import { Cpu, Zap, Crosshair, BarChart2, Maximize2, Minimize2, Activity, Info } 
 
 interface BanditHeatmapProps {
   ucbStats: UcbSurfaceStats[];
+  displayMode?: 'tactical' | 'executive';
 }
 
-export const BanditHeatmap: React.FC<BanditHeatmapProps> = ({ ucbStats }) => {
+export const BanditHeatmap: React.FC<BanditHeatmapProps> = ({ ucbStats, displayMode = 'tactical' }) => {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -42,10 +43,10 @@ export const BanditHeatmap: React.FC<BanditHeatmapProps> = ({ ucbStats }) => {
   const panelContent = (
     <div
       ref={containerRef}
-      className={`bg-[#0b1120] border border-slate-800 rounded-lg p-4 flex flex-col justify-between text-xs font-mono transition-all duration-300 ${
+      className={`rounded-2xl p-4 sm:p-5 flex flex-col justify-between text-xs font-mono transition-all duration-300 ${
         isFullscreen
           ? 'fixed inset-0 z-[999999] bg-[#07090e] p-4 sm:p-6 overflow-hidden shadow-2xl w-screen h-screen'
-          : 'h-[420px]'
+          : 'spacious-card h-[460px] shadow-2xl'
       }`}
     >
       {/* Header */}

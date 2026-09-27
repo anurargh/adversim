@@ -17,6 +17,9 @@ import { PredictionPanel } from './components/PredictionPanel';
 import { BanditHeatmap } from './components/BanditHeatmap';
 import { ExperimentTable } from './components/ExperimentTable';
 import { ArchitectureBenchmark } from './components/ArchitectureBenchmark';
+import { LandingPage } from './components/LandingPage';
+import { AuthModal } from './components/AuthModal';
+import { authService, UserProfile } from './lib/authService';
 import { ConditionId, SimNode, NetworkEdge } from './types';
 import { soundFx } from './utils/audio';
 import {
@@ -43,12 +46,30 @@ import {
   FileCheck2,
   Sliders,
   Flame,
-  Crosshair
+  Crosshair,
+  User,
+  LogOut,
+  ArrowLeft,
+  Eye
 } from 'lucide-react';
 
 type ActiveTab = 'soc' | 'forecasting' | 'ablation' | 'audit';
+type ViewMode = 'landing' | 'simulation';
 
 export default function App() {
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => authService.getCurrentUser());
+  const [viewMode, setViewMode] = useState<ViewMode>('landing');
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
+
+  // Listen to Firebase Auth state changes
+  useEffect(() => {
+    const unsubscribe = authService.onAuthChange((user) => {
+      setCurrentUser(user);
+    });
+    return () => unsubscribe();
+  }, []);
+
   const [engine] = useState(
     () =>
       new SimulationEngine({
@@ -571,12 +592,54 @@ export default function App() {
     ? 0
     : Math.max(0, Math.min(95, ((baselineA - activeMttd) / baselineA) * 100));
 
+  const handleOpenAuth = (mode: 'login' | 'register') => {
+    setAuthModalMode(mode);
+    setAuthModalOpen(true);
+  };
+
+  const handleAuthSuccess = (user: UserProfile) => {
+    setCurrentUser(user);
+    // User can either stay on landing or proceed to simulator
+  };
+
+  const handleLogout = () => {
+    authService.logout();
+    setCurrentUser(null);
+  };
+
+  if (viewMode === 'landing') {
+    return (
+      <>
+        <LandingPage
+          currentUser={currentUser}
+          onOpenAuth={handleOpenAuth}
+          onEnterSimulator={() => setViewMode('simulation')}
+          onLogout={handleLogout}
+        />
+        <AuthModal
+          isOpen={authModalOpen}
+          initialMode={authModalMode}
+          onClose={() => setAuthModalOpen(false)}
+          onAuthSuccess={handleAuthSuccess}
+        />
+      </>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[#07090e] text-slate-100 font-mono p-3 md:p-5 space-y-4">
-      {/* 1. COMPACT HEADER */}
-      <header className="bg-[#0b1120] border border-slate-800 rounded-lg p-3 md:p-3.5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+    <div className="min-h-screen bg-[#060913] text-slate-100 font-sans p-4 md:p-8 space-y-6 max-w-7xl mx-auto">
+      {/* 1. HEADER */}
+      <header className="spacious-card p-4 md:p-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 shadow-2xl">
         {/* Left System Identity */}
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setViewMode('landing')}
+            className="p-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded text-slate-400 hover:text-cyan-400 transition-colors flex items-center gap-1 text-[11px]"
+            title="Return to Landing Page"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Landing</span>
+          </button>
           <div className="p-2 bg-slate-900 border border-slate-800 rounded-md flex items-center justify-center">
             <Activity className="w-4 h-4 text-cyan-400" />
           </div>
@@ -704,23 +767,48 @@ export default function App() {
           >
             {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
           </button>
+
+          <div className="h-4 w-px bg-slate-800 mx-0.5" />
+
+          {/* User Account Session Indicator */}
+          {currentUser ? (
+            <div className="flex items-center gap-1.5 pl-1">
+              <span className="text-[10px] text-cyan-300 max-w-[100px] truncate" title={currentUser.name}>
+                {currentUser.name.split(' ')[0]}
+              </span>
+              <button
+                onClick={handleLogout}
+                title="Log out session"
+                className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
+              >
+                <LogOut className="w-3 h-3" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => handleOpenAuth('login')}
+              className="px-2 py-1 text-[10px] text-cyan-400 hover:text-cyan-300 bg-cyan-950/40 hover:bg-cyan-950/70 border border-cyan-800/40 rounded transition-colors"
+            >
+              Sign In
+            </button>
+          )}
         </div>
       </header>
 
       {/* 2. RESTRAINED 5 KPI TILES */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
-        <div className="bg-[#0b1120] border border-slate-800 rounded-lg p-3 flex flex-col justify-between">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="spacious-card p-4 shadow-lg rounded-xl flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-slate-400 text-[10px] uppercase flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-slate-400" />
+            <span className="text-slate-400 text-[10px] uppercase flex items-center gap-1.5 font-medium">
+              <Clock className="w-3.5 h-3.5 text-cyan-400" />
               Time to Detect (MTTD)
             </span>
-            <span className="text-[9px] px-1.5 py-0.5 rounded font-mono bg-slate-900 text-cyan-400 border border-slate-800">
+            <span className="text-[9px] px-1.5 py-0.5 rounded font-mono bg-slate-900/90 text-cyan-300 border border-slate-700">
               Cond {simState.activeCondition}
             </span>
           </div>
           <div className="mt-1 flex items-baseline justify-between">
-            <span className="text-lg font-bold text-cyan-400">{activeMttd.toFixed(1)}s</span>
+            <span className="text-xl font-bold text-cyan-400">{activeMttd.toFixed(1)}s</span>
             <span className="text-[10px] text-slate-400">
               {simState.activeCondition === 'A'
                 ? 'Baseline Reference'
@@ -729,59 +817,59 @@ export default function App() {
           </div>
         </div>
 
-        <div className="bg-[#0b1120] border border-slate-800 rounded-lg p-3 flex flex-col justify-between">
-          <span className="text-slate-400 text-[10px] uppercase flex items-center gap-1.5">
-            <Cpu className="w-3.5 h-3.5 text-slate-400" />
+        <div className="spacious-card p-4 shadow-lg rounded-xl flex flex-col justify-between">
+          <span className="text-slate-400 text-[10px] uppercase flex items-center gap-1.5 font-medium">
+            <Cpu className="w-3.5 h-3.5 text-amber-400" />
             Max UCB Regret
           </span>
           <div className="mt-1 flex items-baseline justify-between">
-            <span className="text-lg font-bold text-slate-100">
+            <span className="text-xl font-bold text-slate-100">
               {Math.max(...simState.ucbStats.map((s) => s.ucbScore)).toFixed(2)}
             </span>
             <span className="text-[10px] text-slate-400">15 techniques</span>
           </div>
         </div>
 
-        <div className="bg-[#0b1120] border border-slate-800 rounded-lg p-3 flex flex-col justify-between">
-          <span className="text-slate-400 text-[10px] uppercase flex items-center gap-1.5">
-            <Share2 className="w-3.5 h-3.5 text-slate-400" />
+        <div className="spacious-card p-4 shadow-lg rounded-xl flex flex-col justify-between">
+          <span className="text-slate-400 text-[10px] uppercase flex items-center gap-1.5 font-medium">
+            <Share2 className="w-3.5 h-3.5 text-cyan-400" />
             Mesh Connections
           </span>
           <div className="mt-1 flex items-baseline justify-between">
-            <span className="text-lg font-bold text-slate-100">{simState.edges.length} Links</span>
+            <span className="text-xl font-bold text-slate-100">{simState.edges.length} Links</span>
             <span className="text-[10px] text-slate-400">Peer sharing</span>
           </div>
         </div>
 
-        <div className="bg-[#0b1120] border border-slate-800 rounded-lg p-3 flex flex-col justify-between">
-          <span className="text-slate-400 text-[10px] uppercase flex items-center gap-1.5">
-            <Target className="w-3.5 h-3.5 text-slate-400" />
+        <div className="spacious-card p-4 shadow-lg rounded-xl flex flex-col justify-between">
+          <span className="text-slate-400 text-[10px] uppercase flex items-center gap-1.5 font-medium">
+            <Target className="w-3.5 h-3.5 text-emerald-400" />
             Decoy Nodes
           </span>
           <div className="mt-1 flex items-baseline justify-between">
-            <span className="text-lg font-bold text-slate-100">
+            <span className="text-xl font-bold text-slate-100">
               {simState.nodes.filter((n) => n.isHoneypot).length} Active
             </span>
             <span className="text-[10px] text-slate-400">Poisoning active</span>
           </div>
         </div>
 
-        <div className="bg-[#0b1120] border border-slate-800 rounded-lg p-3 flex flex-col justify-between col-span-2 sm:col-span-1">
-          <span className="text-slate-400 text-[10px] uppercase flex items-center gap-1.5">
-            <ShieldAlert className="w-3.5 h-3.5 text-slate-400" />
+        <div className="spacious-card p-4 shadow-lg rounded-xl flex flex-col justify-between col-span-2 sm:col-span-1">
+          <span className="text-slate-400 text-[10px] uppercase flex items-center gap-1.5 font-medium">
+            <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
             Total Alerts
           </span>
           <div className="mt-1 flex items-baseline justify-between">
-            <span className="text-lg font-bold text-slate-100">{simState.totalAlertCount}</span>
+            <span className="text-xl font-bold text-slate-100">{simState.totalAlertCount}</span>
             <span className="text-[10px] text-slate-400">{simState.alerts.length} recent</span>
           </div>
         </div>
       </div>
 
-      {/* 3. TACTICAL NAVIGATION BAR */}
-      <div className="bg-[#0b1120] border border-slate-800 rounded-lg p-1.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+      {/* 3. NAVIGATION BAR */}
+      <div className="spacious-card p-2.5 sm:p-3.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 shadow-lg rounded-xl">
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-1 overflow-x-auto text-xs font-mono">
+        <div className="flex items-center gap-1.5 overflow-x-auto text-xs font-sans">
           <button
             onClick={() => setActiveTab('soc')}
             className={`px-3 py-1.5 rounded font-medium flex items-center gap-2 transition-colors whitespace-nowrap ${
@@ -872,39 +960,37 @@ export default function App() {
       </div>
 
       {/* 4. TAB CONTENT PANELS */}
-      <main className="space-y-4">
+      <main className="space-y-6">
         {/* TAB 1: TOPOLOGY & THREAT MAP */}
         {activeTab === 'soc' && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-              {/* Network Topology Map (Hero surface) (5 cols) */}
-              <div className="lg:col-span-5">
-                <NetworkMap
-                  nodes={simState.nodes}
-                  edges={simState.edges}
-                  selectedNodeId={selectedNodeId}
-                  selectedPresetId={selectedPresetId}
-                  onSelectNode={setSelectedNodeId}
-                  onAddNode={handleAddNode}
-                  onDeleteNode={handleDeleteNode}
-                  onUpdateNode={handleUpdateNode}
-                  onAddEdge={handleAddEdge}
-                  onDeleteEdge={handleDeleteEdge}
-                  onMoveNode={handleMoveNode}
-                  onLoadPreset={handleLoadPreset}
-                  onInjectAttack={handleInjectAttack}
-                  honeypotBroadcastActive={simState.nodes.some(n => n.isHoneypot && n.status === 'under_attack')}
-                  onOpenScorecard={() => setActiveTab('audit')}
-                />
-              </div>
+          <div className="space-y-6">
+            {/* 1. Hero Topology Canvas (Full width, clear borders, never cramped) */}
+            <div className="w-full">
+              <NetworkMap
+                nodes={simState.nodes}
+                edges={simState.edges}
+                selectedNodeId={selectedNodeId}
+                selectedPresetId={selectedPresetId}
+                onSelectNode={setSelectedNodeId}
+                onAddNode={handleAddNode}
+                onDeleteNode={handleDeleteNode}
+                onUpdateNode={handleUpdateNode}
+                onAddEdge={handleAddEdge}
+                onDeleteEdge={handleDeleteEdge}
+                onMoveNode={handleMoveNode}
+                onLoadPreset={handleLoadPreset}
+                onInjectAttack={handleInjectAttack}
+                honeypotBroadcastActive={simState.nodes.some(n => n.isHoneypot && n.status === 'under_attack')}
+                onOpenScorecard={() => setActiveTab('audit')}
+              />
+            </div>
 
-              {/* Bayesian Risk Profile (4 cols) */}
-              <div className="lg:col-span-4">
+            {/* 2. Secondary Telemetry Grid: 2 Equal, Spacious, Well-Bounded Cards */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+              <div>
                 <RadarChart selectedNode={selectedNode} />
               </div>
-
-              {/* Threat Alerts (3 cols) */}
-              <div className="lg:col-span-3">
+              <div>
                 <AlertFeed alerts={simState.alerts} />
               </div>
             </div>
@@ -913,8 +999,8 @@ export default function App() {
 
         {/* TAB 2: ATTACK FORECASTING & BANDIT */}
         {activeTab === 'forecasting' && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <PredictionPanel predictions={simState.predictions} />
               <BanditHeatmap ucbStats={simState.ucbStats} />
             </div>
@@ -923,7 +1009,7 @@ export default function App() {
 
         {/* TAB 3: ABLATION & DETECTION BENCHMARKS */}
         {activeTab === 'ablation' && (
-          <div className="space-y-4">
+          <div className="space-y-6">
             <MTTDChart history={simState.mttdHistory} activeCondition={simState.activeCondition} />
             <ExperimentTable
               metrics={simState.metrics}
@@ -935,7 +1021,7 @@ export default function App() {
 
         {/* TAB 4: SECURITY AUDIT & EVENT LOG */}
         {activeTab === 'audit' && (
-          <div className="space-y-4">
+          <div className="space-y-6">
             <ArchitectureBenchmark
               nodes={simState.nodes}
               edges={simState.edges}
@@ -949,7 +1035,7 @@ export default function App() {
             />
 
             {/* Simulation Event Log */}
-            <div className="bg-[#0b1120] border border-slate-800 rounded-lg p-4 text-xs font-mono">
+            <div className="spacious-card shadow-2xl rounded-2xl p-4 sm:p-5 text-xs font-mono">
               <div className="flex items-center justify-between pb-2 border-b border-slate-800">
                 <div className="flex items-center gap-2 text-slate-200 font-semibold">
                   <Terminal className="w-4 h-4 text-cyan-400" />

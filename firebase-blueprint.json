@@ -1,0 +1,55 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated cybersecurity operator profile stored in Firestore",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Unique Firebase Auth UID of the operator"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of the operator",
+          "maxLength": 100
+        },
+        "email": {
+          "type": "string",
+          "description": "Primary email address",
+          "maxLength": 150
+        },
+        "role": {
+          "type": "string",
+          "description": "SOC defense role assignment",
+          "enum": ["SOC Analyst", "Lead Engineer", "Security Officer", "Red Team Architect"]
+        },
+        "organization": {
+          "type": "string",
+          "description": "Assigned defense organization or team",
+          "maxLength": 120
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Profile picture URL from Google Auth",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of operator enrollment"
+        },
+        "lastLogin": {
+          "type": "string",
+          "description": "ISO timestamp of most recent authenticated session"
+        }
+      },
+      "required": ["uid", "name", "email", "role"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Individual operator profile documents keyed strictly by Firebase Auth UID"
+    }
+  }
+}

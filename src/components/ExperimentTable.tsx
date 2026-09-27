@@ -5,12 +5,14 @@ import { FlaskConical, CheckCircle2, Sliders, ChevronRight, Zap, Maximize2, Mini
 interface ExperimentTableProps {
   metrics: AblationMetric[];
   activeCondition: ConditionId;
+  displayMode?: 'tactical' | 'executive';
   onSelectCondition: (condId: ConditionId) => void;
 }
 
 export const ExperimentTable: React.FC<ExperimentTableProps> = ({
   metrics,
   activeCondition,
+  displayMode = 'tactical',
   onSelectCondition,
 }) => {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
@@ -43,10 +45,10 @@ export const ExperimentTable: React.FC<ExperimentTableProps> = ({
   const panelContent = (
     <div
       ref={containerRef}
-      className={`bg-[#0b1120] border border-slate-800 rounded-lg p-4 flex flex-col justify-between text-xs font-mono transition-all duration-300 ${
+      className={`rounded-2xl p-4 sm:p-5 flex flex-col justify-between text-xs font-mono transition-all duration-300 ${
         isFullscreen
           ? 'fixed inset-0 z-[999999] bg-[#07090e] p-4 sm:p-6 overflow-hidden shadow-2xl w-screen h-screen'
-          : 'h-[440px]'
+          : 'spacious-card h-[460px] shadow-2xl'
       }`}
     >
       {/* Header */}

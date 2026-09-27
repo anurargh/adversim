@@ -36,6 +36,7 @@ interface ArchitectureBenchmarkProps {
   predictions?: StagePrediction[];
   activeCondition?: string;
   selectedPresetId?: string;
+  displayMode?: 'tactical' | 'executive';
 }
 
 export const ArchitectureBenchmark: React.FC<ArchitectureBenchmarkProps> = ({
@@ -48,6 +49,7 @@ export const ArchitectureBenchmark: React.FC<ArchitectureBenchmarkProps> = ({
   predictions = [],
   activeCondition = 'F',
   selectedPresetId,
+  displayMode = 'tactical',
 }) => {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -430,10 +432,10 @@ export const ArchitectureBenchmark: React.FC<ArchitectureBenchmarkProps> = ({
   const panelContent = (
     <div
       ref={containerRef}
-      className={`bg-[#0b1120] border border-slate-800 rounded-lg p-4 flex flex-col gap-3 text-xs font-mono transition-all duration-300 ${
+      className={`rounded-2xl p-4 sm:p-6 flex flex-col gap-3 text-xs font-mono transition-all duration-300 ${
         isFullscreen
           ? 'fixed inset-0 z-[999999] bg-[#07090e] p-4 sm:p-6 overflow-y-auto shadow-2xl w-screen h-screen justify-between'
-          : ''
+          : 'spacious-card shadow-2xl'
       }`}
     >
       {/* Header */}

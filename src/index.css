@@ -25,11 +25,10 @@
   }
 }
 
-/* Hero Network Topology Cockpit Surface (Reserved for Topology Hero Instrument) */
+/* Cockpit Tactical Panel (Compact Mode: Ultra-dense, corner HUD brackets, flush fit) */
 .cockpit-panel {
-  background: linear-gradient(135deg, rgba(11, 17, 32, 0.95) 0%, rgba(7, 10, 16, 0.98) 100%);
-  border: 1px solid rgba(0, 240, 255, 0.2);
-  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.8), 0 0 1px 1px rgba(0, 240, 255, 0.08);
+  background: #080d1a;
+  border: 1px solid #1e293b;
   position: relative;
 }
 
@@ -61,6 +60,52 @@
 .flat-panel {
   background-color: #0b1120;
   border: 1px solid #1e293b;
+}
+
+/* Executive Spacious Mode Panel: Clear, elevated boundaries, card depth, and dedicated header demarcation */
+.spacious-card {
+  background: #0f172a;
+  border: 1.5px solid #334155;
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  border-radius: 1rem;
+  overflow: hidden;
+  position: relative;
+  transition: all 0.25s ease-in-out;
+}
+
+.spacious-card:hover {
+  border-color: #38bdf8;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.9), 0 0 0 1.5px rgba(56, 189, 248, 0.35);
+}
+
+.spacious-card-header {
+  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+  border-bottom: 1.5px solid #334155;
+  padding: 0.875rem 1.25rem;
+}
+
+.spacious-card-body {
+  padding: 1.25rem;
+}
+
+/* Executive Spacious Mode Panel: Clear, elegant borders, subtle header divider, and card depth */
+.executive-panel {
+  background: #0f172a;
+  border: 1.5px solid #334155;
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  position: relative;
+  border-radius: 0.875rem;
+}
+
+.executive-panel:hover {
+  border-color: #38bdf8;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.9), 0 0 0 1.5px rgba(56, 189, 248, 0.35);
+}
+
+.executive-badge {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid #334155;
+  color: #94a3b8;
 }
 
 /* Functional Data Visualizations */

@@ -20,9 +20,10 @@ import {
 
 interface AlertFeedProps {
   alerts: AlertEvent[];
+  displayMode?: 'tactical' | 'executive';
 }
 
-export const AlertFeed: React.FC<AlertFeedProps> = ({ alerts }) => {
+export const AlertFeed: React.FC<AlertFeedProps> = ({ alerts, displayMode = 'tactical' }) => {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const [filterMode, setFilterMode] = useState<'ALL' | 'HONEYPOT' | 'REJECTED' | 'CRITICAL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,10 +72,10 @@ export const AlertFeed: React.FC<AlertFeedProps> = ({ alerts }) => {
   const panelContent = (
     <div
       ref={containerRef}
-      className={`bg-[#0b1120] border border-slate-800 rounded-lg p-4 flex flex-col justify-between transition-all duration-300 ${
+      className={`rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-all duration-300 ${
         isFullscreen
           ? 'fixed inset-0 z-[999999] bg-[#07090e] p-4 sm:p-6 overflow-hidden shadow-2xl w-screen h-screen'
-          : 'h-[450px]'
+          : 'spacious-card h-[490px] shadow-2xl'
       }`}
     >
       {/* Panel Header */}

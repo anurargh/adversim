@@ -31,7 +31,96 @@ export class SimulationEngine {
       newState.totalAlertCount = 0;
       newState.attackStartRound = null;
     }
+    const nodesChanged = newState.nodes && newState.nodes.length !== this.state.nodes.length;
+    const edgesChanged = newState.edges && newState.edges.length !== this.state.edges.length;
+
     this.state = { ...this.state, ...newState };
+
+    // If topology structure changed (nodes or links added/removed), re-calculate active MTTD immediately
+    if (nodesChanged || edgesChanged) {
+      this.recalculateTopologyMttd();
+    }
+  }
+
+  private recalculateTopologyMttd(): void {
+    const totalNodes = this.state.nodes.length;
+    const honeypots = this.state.nodes.filter((n) => n.isHoneypot);
+    const honeypotRatio = totalNodes > 0 ? honeypots.length / totalNodes : 0;
+    const totalPossibleEdges = totalNodes > 1 ? (totalNodes * (totalNodes - 1)) / 2 : 1;
+    const meshDensity = this.state.edges.length / (totalPossibleEdges || 1);
+    const isolatedNodes = this.state.nodes.filter(
+      (n) => !this.state.edges.some((e) => e.source === n.id || e.target === n.id)
+    );
+    const adminNodes = this.state.nodes.filter((n) => n.type === 'Admin');
+    const serverNodes = this.state.nodes.filter((n) => n.type === 'Server');
+
+    const nodeScaleRatio = totalNodes > 0 ? totalNodes / 7.0 : 1.0;
+
+    let honeypotModifier = 1.0;
+    if (honeypots.length === 0) {
+      honeypotModifier = 1.35;
+    } else {
+      honeypotModifier = Math.max(0.55, 1.0 - (honeypotRatio * 0.9) - (honeypots.length * 0.04));
+    }
+
+    let connectivityModifier = 1.0;
+    if (meshDensity >= 0.35) {
+      connectivityModifier -= 0.15;
+    } else if (meshDensity < 0.15) {
+      connectivityModifier += 0.25;
+    }
+    if (isolatedNodes.length > 0) {
+      connectivityModifier += (isolatedNodes.length / Math.max(1, totalNodes)) * 0.45;
+    }
+
+    let criticalAssetModifier = 1.0;
+    const criticalNodes = [...adminNodes, ...serverNodes];
+    if (criticalNodes.length > 0 && honeypots.length === 0) {
+      criticalAssetModifier += 0.20;
+    }
+
+    const condition = this.state.activeCondition;
+    let archFactor = 1.0;
+    if (condition === 'A') {
+      archFactor = Math.max(0.4, Math.min(2.5, (nodeScaleRatio ** 0.55) * connectivityModifier * (honeypots.length > 0 ? 0.95 : 1.25)));
+    } else if (condition === 'B') {
+      archFactor = Math.max(0.4, Math.min(2.2, (nodeScaleRatio ** 0.35) * connectivityModifier));
+    } else if (condition === 'C') {
+      archFactor = Math.max(0.4, Math.min(2.2, (nodeScaleRatio ** 0.45) * honeypotModifier));
+    } else if (condition === 'D') {
+      archFactor = Math.max(0.4, Math.min(2.0, (nodeScaleRatio ** 0.40) * connectivityModifier));
+    } else {
+      const combinedMod = (honeypotModifier * 0.55) + (connectivityModifier * 0.45);
+      const scaleEffect = honeypotRatio >= 0.2 ? Math.pow(nodeScaleRatio, 0.2) : Math.pow(nodeScaleRatio, 0.5);
+      archFactor = Math.max(0.35, Math.min(2.2, scaleEffect * combinedMod * criticalAssetModifier));
+    }
+
+    const baseConditionMttd: Record<ConditionId, number> = {
+      A: 142.5,
+      B: 88.3,
+      C: 72.1,
+      D: 64.8,
+      E: 27.4,
+      F: 36.8,
+    };
+
+    const newActiveTarget = Number(Math.max(5.0, baseConditionMttd[condition] * archFactor).toFixed(1));
+
+    // Update current round in mttdHistory if available
+    if (this.state.mttdHistory.length > 0) {
+      const lastEntry = { ...this.state.mttdHistory[this.state.mttdHistory.length - 1] };
+      const condKey = `Condition${condition}`;
+      lastEntry[condKey] = newActiveTarget;
+      this.state.mttdHistory = [...this.state.mttdHistory.slice(0, -1), lastEntry];
+    }
+
+    // Sync metrics matrix
+    this.state.metrics = this.state.metrics.map((m) => {
+      if (m.conditionId === condition) {
+        return { ...m, mttd: newActiveTarget };
+      }
+      return m;
+    });
   }
 
   public stepRound(): SimulationState {
@@ -361,7 +450,7 @@ export class SimulationEngine {
       );
     }
 
-    // 10. MTTD History & Real Measurement calculation
+    // 10. MTTD History & Real Dynamic Measurement calculation
     // Architectural topology modifiers
     const totalNodes = this.state.nodes.length;
     const honeypots = this.state.nodes.filter((n) => n.isHoneypot);
@@ -371,14 +460,68 @@ export class SimulationEngine {
     const isolatedNodes = this.state.nodes.filter(
       (n) => !this.state.edges.some((e) => e.source === n.id || e.target === n.id)
     );
+    const adminNodes = this.state.nodes.filter((n) => n.type === 'Admin');
+    const serverNodes = this.state.nodes.filter((n) => n.type === 'Server');
 
-    // Architectural adjustment factor:
-    // Honeypot traps and dense mesh accelerate detection; isolated nodes create delay blind spots
+    // Baseline reference scale (default enterprise network has 7 nodes)
+    // 1) Node Scale Impact: As nodes scale up, adversary has more search space, but defensive collaboration can also expand.
+    // In uncollaborative networks, more nodes drastically increase MTTD because intrusion signals get lost in the noise.
+    // In collaborative networks (B, E, F), peer sharing counteracts node growth.
+    const nodeScaleRatio = totalNodes > 0 ? totalNodes / 7.0 : 1.0;
+
+    // 2) Honeypot Decoy Impact: Decoys attract attacks and trigger immediate early tripwires
+    // Honeypots reduce MTTD by up to 45% when well deployed; 0 honeypots increases MTTD significantly
+    let honeypotModifier = 1.0;
+    if (honeypots.length === 0) {
+      honeypotModifier = 1.35; // Severe penalty for zero decoys
+    } else {
+      // Each active decoy provides tangible early-trip coverage
+      honeypotModifier = Math.max(0.55, 1.0 - (honeypotRatio * 0.9) - (honeypots.length * 0.04));
+    }
+
+    // 3) Connectivity & Mesh Density: Dense links accelerate consensus propagation; sparse or isolated nodes delay alerts
+    let connectivityModifier = 1.0;
+    if (meshDensity >= 0.35) {
+      connectivityModifier -= 0.15; // Fast gossip propagation
+    } else if (meshDensity < 0.15) {
+      connectivityModifier += 0.25; // Sparse, siloed communication
+    }
+    // Isolated nodes create untracked blind spots
+    if (isolatedNodes.length > 0) {
+      connectivityModifier += (isolatedNodes.length / Math.max(1, totalNodes)) * 0.45;
+    }
+
+    // 4) High-value asset exposure:
+    // If critical servers or admins exist without honeypot neighbors, attacker can breach without tripping decoys
+    let criticalAssetModifier = 1.0;
+    const criticalNodes = [...adminNodes, ...serverNodes];
+    if (criticalNodes.length > 0 && honeypots.length === 0) {
+      criticalAssetModifier += 0.20;
+    }
+
+    // Combined architectural scaling factor:
+    // When condition is uncollaborative (A, C, D), node scale expands MTTD directly.
+    // When condition has collaborative sharing (B, E, F), collaboration dampens the scale penalty.
     let archFactor = 1.0;
-    if (honeypotRatio >= 0.25) archFactor -= 0.08;
-    else if (honeypotRatio === 0) archFactor += 0.12;
-    if (meshDensity >= 0.3) archFactor -= 0.05;
-    if (isolatedNodes.length > 0) archFactor += isolatedNodes.length * 0.08;
+    if (condition === 'A') {
+      // Baseline static: no sharing, no honeypots. Scales steeply with node count
+      archFactor = Math.max(0.4, Math.min(2.5, (nodeScaleRatio ** 0.55) * connectivityModifier * (honeypots.length > 0 ? 0.95 : 1.25)));
+    } else if (condition === 'B') {
+      // Collaboration only: benefits strongly from mesh density and node count
+      archFactor = Math.max(0.4, Math.min(2.2, (nodeScaleRatio ** 0.35) * connectivityModifier));
+    } else if (condition === 'C') {
+      // Honeypot only: heavily driven by honeypot ratio and decoy placement
+      archFactor = Math.max(0.4, Math.min(2.2, (nodeScaleRatio ** 0.45) * honeypotModifier));
+    } else if (condition === 'D') {
+      // Predictor only: stage predictor active
+      archFactor = Math.max(0.4, Math.min(2.0, (nodeScaleRatio ** 0.40) * connectivityModifier));
+    } else {
+      // Conditions E and F (full defense): benefits from both honeypots and mesh density
+      const combinedMod = (honeypotModifier * 0.55) + (connectivityModifier * 0.45);
+      // More nodes with decoys increases detection probability; more nodes without decoys increases search latency
+      const scaleEffect = honeypotRatio >= 0.2 ? Math.pow(nodeScaleRatio, 0.2) : Math.pow(nodeScaleRatio, 0.5);
+      archFactor = Math.max(0.35, Math.min(2.2, scaleEffect * combinedMod * criticalAssetModifier));
+    }
 
     // Baseline targets for each condition (seconds)
     // NOTE: Condition E (All Defenses vs Naive Attacker) has the lowest MTTD (~27.4s) because naive attacker is predictable.
@@ -408,20 +551,20 @@ export class SimulationEngine {
 
       // Node type & deceptive trip modifiers
       if (targetNode.isHoneypot && isHoneypotActive) {
-        eventLatency *= 0.72; // Honeypot capture triggers immediate high-priority alert
+        eventLatency *= 0.65; // Honeypot capture triggers immediate high-priority alert
       } else if (targetNode.type === 'Admin') {
-        eventLatency *= 0.88; // Deep domain admin audit telemetry
+        eventLatency *= 0.85; // Deep domain admin audit telemetry
       } else if (targetNode.type === 'User') {
-        eventLatency *= 1.10; // Background user traffic adds minor triage ambiguity
+        eventLatency *= 1.15; // Background user traffic adds minor triage ambiguity
       }
 
       // Fused score confidence: higher fused certainty accelerates confirmed triage
-      const confidenceMod = Math.max(0.78, Math.min(1.22, 1.20 - fusedScore * 0.40));
+      const confidenceMod = Math.max(0.75, Math.min(1.25, 1.20 - fusedScore * 0.40));
       eventLatency *= confidenceMod;
 
       // Natural stochastic event variation per campaign (±1.5s)
       eventLatency += (Math.sin(round * 1.6) * 1.5 + (Math.random() - 0.5) * 1.2);
-      instantLatency = Number(eventLatency.toFixed(1));
+      instantLatency = Math.max(5.0, Number(eventLatency.toFixed(1)));
 
       this.state.rollingMttdBuffer = [
         ...(this.state.rollingMttdBuffer || []).slice(-9),
@@ -431,13 +574,13 @@ export class SimulationEngine {
 
     // Dynamic active rolling MTTD with organic telemetry pulse (never static)
     const buf = this.state.rollingMttdBuffer || [];
-    const activeTarget = baseConditionMttd[condition] * archFactor;
+    const activeTarget = Math.max(5.0, baseConditionMttd[condition] * archFactor);
     const livePulse = Math.sin(round * 0.45) * 0.6 + Math.cos(round * 0.22) * 0.4;
     const activeRollingMttd = buf.length > 0
-      ? Number(((buf.reduce((a, b) => a + b, 0) / buf.length) * 0.6 + activeTarget * 0.4 + livePulse).toFixed(1))
+      ? Number(((buf.reduce((a, b) => a + b, 0) / buf.length) * 0.65 + activeTarget * 0.35 + livePulse).toFixed(1))
       : Number((activeTarget + livePulse).toFixed(1));
 
-    // Realistic oscillating telemetry values with small natural variance across conditions
+    // Dynamic telemetry values across all conditions adapting to the live network architecture
     const oscA = Math.sin(round / 7.0) * 3.0 + Math.cos(round * 0.3) * 1.2;
     const oscB = Math.sin(round / 6.0) * 2.2 + Math.cos(round * 0.4) * 0.9;
     const oscC = Math.sin(round / 5.5) * 1.8 + Math.cos(round * 0.5) * 0.8;
@@ -447,12 +590,12 @@ export class SimulationEngine {
 
     const newMttdEntry = {
       round,
-      ConditionA: condition === 'A' ? activeRollingMttd : Number((baseConditionMttd.A * (honeypotRatio === 0 ? 1.05 : 0.98) + oscA).toFixed(1)),
-      ConditionB: condition === 'B' ? activeRollingMttd : Number((baseConditionMttd.B * (meshDensity >= 0.3 ? 0.96 : 1.03) + oscB).toFixed(1)),
-      ConditionC: condition === 'C' ? activeRollingMttd : Number((baseConditionMttd.C * (honeypotRatio >= 0.2 ? 0.95 : 1.05) + oscC).toFixed(1)),
-      ConditionD: condition === 'D' ? activeRollingMttd : Number((baseConditionMttd.D + oscD).toFixed(1)),
-      ConditionE: condition === 'E' ? activeRollingMttd : Number((baseConditionMttd.E * archFactor + oscE).toFixed(1)),
-      ConditionF: condition === 'F' ? activeRollingMttd : Number((baseConditionMttd.F * archFactor + oscF).toFixed(1)),
+      ConditionA: condition === 'A' ? activeRollingMttd : Number(Math.max(10, baseConditionMttd.A * (nodeScaleRatio ** 0.55) * (honeypots.length > 0 ? 0.95 : 1.25) + oscA).toFixed(1)),
+      ConditionB: condition === 'B' ? activeRollingMttd : Number(Math.max(8, baseConditionMttd.B * (nodeScaleRatio ** 0.35) * connectivityModifier + oscB).toFixed(1)),
+      ConditionC: condition === 'C' ? activeRollingMttd : Number(Math.max(7, baseConditionMttd.C * (nodeScaleRatio ** 0.45) * honeypotModifier + oscC).toFixed(1)),
+      ConditionD: condition === 'D' ? activeRollingMttd : Number(Math.max(6, baseConditionMttd.D * (nodeScaleRatio ** 0.40) * connectivityModifier + oscD).toFixed(1)),
+      ConditionE: condition === 'E' ? activeRollingMttd : Number(Math.max(4, baseConditionMttd.E * archFactor + oscE).toFixed(1)),
+      ConditionF: condition === 'F' ? activeRollingMttd : Number(Math.max(5, baseConditionMttd.F * archFactor + oscF).toFixed(1)),
     };
 
     // Keep last 80 entries so chart shows meaningful trajectory

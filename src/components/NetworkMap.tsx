@@ -44,6 +44,7 @@ export interface NetworkMapProps {
   edges: NetworkEdge[];
   selectedNodeId: string | null;
   selectedPresetId?: string;
+  displayMode?: 'tactical' | 'executive';
   onSelectNode: (nodeId: string) => void;
   onAddNode?: (newNode: SimNode) => void;
   onDeleteNode?: (nodeId: string) => void;
@@ -62,6 +63,7 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({
   edges,
   selectedNodeId,
   selectedPresetId = 'default-enterprise',
+  displayMode = 'tactical',
   onSelectNode,
   onAddNode,
   onDeleteNode,
@@ -236,16 +238,13 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({
   const getNodePos = useCallback(
     (node: SimNode, index: number, total: number, width: number, height: number) => {
       if (node.x !== undefined && node.y !== undefined) {
-        // If node has saved position, scale properly if fullscreen
-        if (isFullscreen) {
-          const scaledX = (node.x / 650) * width;
-          const scaledY = (node.y / 370) * height;
-          return {
-            x: Math.max(50, Math.min(width - 50, scaledX)),
-            y: Math.max(50, Math.min(height - 50, scaledY)),
-          };
-        }
-        return { x: node.x, y: node.y };
+        // Responsively scale coordinates from reference 650x370 to actual container width and height
+        const scaledX = (node.x / 650) * width;
+        const scaledY = (node.y / 370) * height;
+        return {
+          x: Math.max(45, Math.min(width - 55, scaledX)),
+          y: Math.max(45, Math.min(height - 45, scaledY)),
+        };
       }
       const angle = (2 * Math.PI * index) / Math.max(1, total);
       const radius = Math.min(width, height) * (isFullscreen ? 0.38 : 0.35);
@@ -686,10 +685,10 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({
           }
         }
       }}
-      className={`cockpit-panel rounded-xl p-4 flex flex-col relative transition-all duration-300 ${
+      className={`rounded-2xl p-4 sm:p-5 flex flex-col relative transition-all duration-300 ${
         isFullscreen
           ? 'fixed inset-0 z-[999999] bg-[#07090e] p-4 sm:p-6 md:p-8 overflow-y-scroll overflow-x-hidden shadow-2xl focus:outline-none scroll-smooth'
-          : 'h-[450px] justify-between'
+          : 'spacious-card h-[560px] justify-between shadow-2xl'
       }`}
       style={
         isFullscreen
