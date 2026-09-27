@@ -249,7 +249,7 @@ export const AlertFeed: React.FC<AlertFeedProps> = ({ alerts }) => {
                 {/* Score Barometer & Profile Vector */}
                 <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1.5 pt-1.5 border-t border-slate-800/80">
                   <span className="truncate max-w-[130px]">
-                    Adv: <strong className="text-slate-300 font-normal">{alert.attackerProfile}</strong>
+                    Adv: <strong className="text-slate-300 font-normal">{alert.attackerProfile.replace(/\s*\([^)]*\)/g, '')}</strong>
                   </span>
                   <div className="flex items-center gap-2">
                     <span title="Anomaly Detector Fused Output">

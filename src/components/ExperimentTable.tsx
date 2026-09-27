@@ -87,13 +87,6 @@ export const ExperimentTable: React.FC<ExperimentTableProps> = ({
             </button>
           </div>
         </div>
-
-        <p className="text-[11px] text-slate-400 mt-2">
-          Empirical benchmarks isolating peer collaboration, honeypots, Markov forecasting, and bandit adaptation.
-          <span className="block mt-1 text-[10px] text-slate-500">
-            <strong>Adversary Dynamics:</strong> Condition E tests all defenses against a naive, predictable attacker (fastest MTTD ~27.4s). Condition F tests against an adaptive UCB Multi-Armed Bandit that explores blind spots and evades hardened surfaces, resulting in higher detection latency (~36.8s).
-          </span>
-        </p>
       </div>
 
       {/* Table Area */}

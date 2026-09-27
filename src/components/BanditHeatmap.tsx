@@ -87,8 +87,7 @@ export const BanditHeatmap: React.FC<BanditHeatmapProps> = ({ ucbStats }) => {
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mt-2 text-[11px] text-slate-400 gap-1">
-          <span>Upper Confidence Bound: <code className="text-cyan-400 bg-slate-950 px-1 py-0.5 rounded border border-slate-800">UCB1 = μ_i + c · √(2·ln(N) / n_i)</code></span>
+        <div className="flex items-center justify-start mt-2 text-[11px] text-slate-400">
           <span className="text-slate-300">
             Top Vector: <strong className="text-cyan-400">{topTarget?.mitreCode}</strong> ({topTarget ? (MITRE_SURFACE_MAP[topTarget.surface]?.techniqueName || topTarget.surface.replace(/_/g, ' ')) : ''})
           </span>

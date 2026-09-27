@@ -452,9 +452,6 @@ export const ArchitectureBenchmark: React.FC<ArchitectureBenchmarkProps> = ({
               LIVE AUDIT ACTIVE
             </span>
           </div>
-          <p className="text-slate-400 text-[11px] mt-0.5">
-            Real-time verification of network architecture resilience against multi-armed bandit exploration.
-          </p>
         </div>
 
         <div className="flex items-center gap-2">

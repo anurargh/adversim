@@ -5,8 +5,8 @@ import { spawn, ChildProcess } from 'child_process';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer as createViteServer } from 'vite';
 
-const PORT = 3000;
-const PYTHON_PORT = 8000;
+const PORT = Number(process.env.PORT) || 3000;
+const PYTHON_PORT = Number(process.env.PYTHON_PORT) || 8000;
 
 // Cache of latest simulation state relayed from genuine Python backend
 let latestBackendState: any = null;

@@ -718,7 +718,7 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({
               Defensive Network Topology Map
             </h3>
             <span className="px-1.5 py-0.5 rounded font-mono font-bold text-[9px] bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
-              {nodes.length} NODES // {edges.length} LINKS
+              {nodes.length} NODES • {edges.length} LINKS
             </span>
             {isFullscreen && (
               <span className="px-2 py-0.5 rounded font-mono font-bold text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse">

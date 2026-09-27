@@ -117,10 +117,6 @@ export const MTTDChart: React.FC<MTTDChartProps> = ({ history, activeCondition =
             </button>
           </div>
         </div>
-
-        <p className="text-[11px] text-slate-400 mt-2">
-          Longitudinal comparison across 6 experimental configurations. Note: Condition E (All Defenses vs Naive Attacker) achieves lowest detection latency (~27.4s); Condition F faces an adaptive UCB bandit that actively probes and evades hardening (~36.8s).
-        </p>
       </div>
 
       {/* Chart Canvas */}

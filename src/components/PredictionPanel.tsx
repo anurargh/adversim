@@ -82,10 +82,6 @@ export const PredictionPanel: React.FC<PredictionPanelProps> = ({ predictions })
             </button>
           </div>
         </div>
-
-        <p className="text-[11px] text-slate-400 mt-2">
-          Probabilistic forecasting of adversary kill chain transitions and proactive defense pre-hardening.
-        </p>
       </div>
 
       {/* Prediction Cards Stream */}

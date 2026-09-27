@@ -542,13 +542,13 @@ export default function App() {
 
   // Compute Fleet Defcon Status
   const nodesUnderAttack = simState.nodes.filter((n) => n.status === 'under_attack').length;
-  let defconLabel = 'DEFCON-4 // NOMINAL PATROL';
+  let defconLabel = 'DEFCON-4 • NOMINAL PATROL';
   let defconColor = 'bg-emerald-950/60 text-emerald-300 border-emerald-500/30';
   if (nodesUnderAttack > 0) {
-    defconLabel = `DEFCON-1 // ${nodesUnderAttack} NODES ENGAGED`;
+    defconLabel = `DEFCON-1 • ${nodesUnderAttack} NODES ENGAGED`;
     defconColor = 'bg-rose-950/80 text-rose-300 border-rose-500/50 animate-pulse';
   } else if (simState.alerts.length > 0 && simState.currentRound - (simState.alerts[0]?.round || 0) < 3) {
-    defconLabel = 'DEFCON-2 // ADVERSARY PROBING';
+    defconLabel = 'DEFCON-2 • ADVERSARY PROBING';
     defconColor = 'bg-amber-950/70 text-amber-300 border-amber-500/40';
   }
 
@@ -585,7 +585,6 @@ export default function App() {
               <h1 className="text-sm font-bold tracking-wider text-slate-100 uppercase">
                 AdverSim
               </h1>
-              <span className="text-[10px] text-slate-400">v4.0</span>
             </div>
             <p className="text-[11px] text-slate-400 mt-0.5">
               Multi-agent collaborative cyber defense simulation
@@ -918,22 +917,6 @@ export default function App() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <PredictionPanel predictions={simState.predictions} />
               <BanditHeatmap ucbStats={simState.ucbStats} />
-            </div>
-
-            {/* Quick Context Summary */}
-            <div className="bg-[#0b1120] border border-slate-800 rounded-lg p-3 flex flex-col sm:flex-row items-center justify-between text-xs font-mono text-slate-400 gap-2">
-              <div className="flex items-center gap-2">
-                <BrainCircuit className="w-4 h-4 text-cyan-400" />
-                <span>
-                  Markov models predict MITRE kill chain transitions; Multi-Armed Bandit (UCB1) maps attacker exploration across 15 techniques.
-                </span>
-              </div>
-              <button
-                onClick={() => setActiveTab('soc')}
-                className="px-3 py-1 bg-slate-900 hover:bg-slate-800 text-cyan-400 border border-slate-800 rounded text-[11px] font-medium"
-              >
-                View Topology Map →
-              </button>
             </div>
           </div>
         )}
