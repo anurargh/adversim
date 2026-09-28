@@ -134,10 +134,25 @@ export default function App() {
   useEffect(() => {
     let ws: WebSocket | null = null;
 
-    function connectWs() {
+    function getBackendWsUrl() {
+      const configuredBackend = import.meta.env.VITE_BACKEND_URL as string | undefined;
+      if (configuredBackend && configuredBackend.trim() !== '') {
+        const cleanUrl = configuredBackend.trim().replace(/\/+$/, '');
+        if (cleanUrl.startsWith('ws://') || cleanUrl.startsWith('wss://')) {
+          return cleanUrl.endsWith('/ws') ? cleanUrl : `${cleanUrl}/ws`;
+        }
+        const wsProtocol = cleanUrl.startsWith('https://') ? 'wss://' : 'ws://';
+        const hostPath = cleanUrl.replace(/^https?:\/\//, '');
+        return `${wsProtocol}${hostPath}/ws`;
+      }
       const isHttps = window.location.protocol === 'https:';
       const protocol = isHttps ? 'wss:' : 'ws:';
-      const primaryUrl = `${protocol}//${window.location.host}/ws`;
+      return `${protocol}//${window.location.host}/ws`;
+    }
+
+    function connectWs() {
+      const isHttps = window.location.protocol === 'https:';
+      const primaryUrl = getBackendWsUrl();
       
       setWsStatusMessage(`Connecting: ${primaryUrl}`);
 
