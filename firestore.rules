@@ -33,6 +33,21 @@ service cloud.firestore {
              (!('lastLogin' in data) || data.lastLogin is string);
     }
 
+    function isValidTopology(data) {
+      return data.keys().hasAll(['id', 'userId', 'name', 'nodes', 'edges', 'createdAt']) &&
+             data.keys().hasOnly(['id', 'userId', 'name', 'description', 'version', 'createdAt', 'updatedAt', 'nodes', 'edges', 'metadata']) &&
+             data.id is string && data.id.size() <= 128 &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 120 &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 500)) &&
+             (!('version' in data) || (data.version is string && data.version.size() <= 32)) &&
+             data.createdAt is string && data.createdAt.size() <= 64 &&
+             (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64)) &&
+             data.nodes is list && data.nodes.size() <= 200 &&
+             data.edges is list && data.edges.size() <= 500 &&
+             (!('metadata' in data) || data.metadata is map);
+    }
+
     // Operator Users Collection
     match /users/{userId} {
       // Only the authenticated operator can read their own profile
@@ -48,6 +63,17 @@ service cloud.firestore {
 
       // Disallow client deletion of audit user records
       allow delete: if false;
+
+      // Topologies authored by this operator
+      match /topologies/{topologyId} {
+        allow get: if isOwner(userId) && isValidId(userId) && isValidId(topologyId);
+        allow list: if isOwner(userId) && isValidId(userId);
+        allow create: if isOwner(userId) && isValidId(userId) && isValidId(topologyId) && isValidTopology(request.resource.data);
+        allow update: if isOwner(userId) && isValidId(userId) && isValidId(topologyId) && isValidTopology(request.resource.data) &&
+                         request.resource.data.userId == resource.data.userId &&
+                         request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if isOwner(userId) && isValidId(userId) && isValidId(topologyId);
+      }
     }
   }
 }

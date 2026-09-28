@@ -1,7 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as d3 from 'd3';
-import { SimNode, NetworkEdge, NodeType } from '../types';
+import { SimNode, NetworkEdge, NodeType, SavedTopology } from '../types';
 import { ARCHITECTURE_PRESETS, generateInitialWeights } from '../data/initialState';
+import { UserProfile } from '../lib/authService';
+import { topologyService } from '../lib/topologyService';
+import { SaveTopologyModal } from './SaveTopologyModal';
+import { SavedDesignsModal } from './SavedDesignsModal';
 import {
   Shield,
   Zap,
@@ -35,7 +39,15 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowLeft,
-  ArrowRight
+  ArrowRight,
+  Save,
+  Upload,
+  Download,
+  FileCode,
+  FileText,
+  Image as ImageIcon,
+  FolderKanban,
+  CheckCircle2
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 
@@ -45,6 +57,7 @@ export interface NetworkMapProps {
   selectedNodeId: string | null;
   selectedPresetId?: string;
   displayMode?: 'tactical' | 'executive';
+  currentUser?: UserProfile | null;
   onSelectNode: (nodeId: string) => void;
   onAddNode?: (newNode: SimNode) => void;
   onDeleteNode?: (nodeId: string) => void;
@@ -53,9 +66,11 @@ export interface NetworkMapProps {
   onDeleteEdge?: (sourceId: string, targetId: string) => void;
   onMoveNode?: (nodeId: string, x: number, y: number) => void;
   onLoadPreset?: (presetId: string) => void;
+  onLoadCustomTopology?: (topology: SavedTopology) => void;
   onInjectAttack?: (type: 'apt29' | 'pth' | 'exfil' | 'decoy_probe') => void;
   honeypotBroadcastActive?: boolean;
   onOpenScorecard?: () => void;
+  onOpenAuthModal?: () => void;
 }
 
 export const NetworkMap: React.FC<NetworkMapProps> = ({
@@ -64,6 +79,7 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({
   selectedNodeId,
   selectedPresetId = 'default-enterprise',
   displayMode = 'tactical',
+  currentUser,
   onSelectNode,
   onAddNode,
   onDeleteNode,
@@ -72,18 +88,113 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({
   onDeleteEdge,
   onMoveNode,
   onLoadPreset,
+  onLoadCustomTopology,
   onInjectAttack,
   honeypotBroadcastActive = false,
   onOpenScorecard,
+  onOpenAuthModal,
 }) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const fleetRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [sidePanelOpen, setSidePanelOpen] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
   const [linkSourceId, setLinkSourceId] = useState<string | null>(null);
+
+  // Modals for saving & managing topologies
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showSavedDesignsModal, setShowSavedDesignsModal] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const handleFileImport = async (file: File) => {
+    const res = await topologyService.parseTopologyFile(file);
+    if (res.success && res.topology) {
+      if (currentUser?.id) {
+        await topologyService.saveTopologyToCloud(currentUser.id, res.topology);
+      } else {
+        topologyService.saveTopologyLocally(res.topology);
+      }
+      if (onLoadCustomTopology) {
+        onLoadCustomTopology(res.topology);
+      }
+      setToastMessage(`Architecture "${res.topology.name}" loaded successfully (${res.topology.nodes.length} nodes, ${res.topology.edges.length} links)!`);
+      setTimeout(() => setToastMessage(null), 5000);
+    } else {
+      setToastMessage(res.error || 'Failed to parse topology file.');
+      setTimeout(() => setToastMessage(null), 5000);
+    }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleFileImport(file);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleQuickExportJson = () => {
+    const top: SavedTopology = {
+      id: `top_${Date.now().toString(36)}`,
+      name: `AdverSim Topology (${nodes.length} nodes)`,
+      version: '1.0',
+      createdAt: new Date().toISOString(),
+      nodes: nodes.map(n => ({ ...n })),
+      edges: edges.map(e => ({ ...e })),
+      metadata: {
+        authorName: currentUser?.name || 'SOC Operator',
+        nodeCount: nodes.length,
+        edgeCount: edges.length,
+        honeypotCount: nodes.filter(n => n.isHoneypot).length,
+      }
+    };
+    topologyService.exportTopologyAsJson(top);
+    setToastMessage('Exported topology JSON file.');
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  const handleQuickExportPng = async () => {
+    if (!svgRef.current) return;
+    try {
+      setToastMessage('Rendering PNG screenshot...');
+      await topologyService.exportTopologyAsImage(svgRef.current, `AdverSim-Topology-${nodes.length}-Nodes`);
+      setToastMessage('High-resolution PNG downloaded.');
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (err: any) {
+      setToastMessage('Failed to export PNG: ' + err.message);
+    }
+  };
+
+  const handleQuickExportPdf = async () => {
+    try {
+      setToastMessage('Generating PDF Specification Report...');
+      const top: SavedTopology = {
+        id: `top_${Date.now().toString(36)}`,
+        name: `Defensive Architecture (${nodes.length} Nodes)`,
+        version: '1.0',
+        createdAt: new Date().toISOString(),
+        nodes: nodes.map(n => ({ ...n })),
+        edges: edges.map(e => ({ ...e })),
+        metadata: {
+          authorName: currentUser?.name || 'SOC Operator',
+          nodeCount: nodes.length,
+          edgeCount: edges.length,
+          honeypotCount: nodes.filter(n => n.isHoneypot).length,
+        }
+      };
+      await topologyService.exportTopologyAsPdf(svgRef.current, top, currentUser?.name);
+      setToastMessage('PDF Specification Report downloaded.');
+      setTimeout(() => setToastMessage(null), 4000);
+    } catch (err: any) {
+      setToastMessage('Failed to export PDF: ' + err.message);
+    }
+  };
 
   // Canvas Pan & Zoom State for mousewheel and drag navigation
   const [canvasPan, setCanvasPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -748,6 +859,70 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({
               })}
             </div>
 
+            {/* Hidden native file input for importing topology JSON files */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileInputChange}
+              accept=".json"
+              className="hidden"
+            />
+
+            {/* Architecture Management: Save, Library, Import, Quick Exports */}
+            <div className="flex items-center gap-1.5 border-l border-white/[0.08] pl-2">
+              <button
+                onClick={() => setShowSaveModal(true)}
+                className="px-2.5 py-1 rounded bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-[10px] font-mono flex items-center gap-1 transition-colors shadow-sm cursor-pointer"
+                title="Save current topology design as File, Image, PDF or to Account"
+              >
+                <Save className="w-3 h-3 text-slate-950" />
+                <span>Save Design</span>
+              </button>
+
+              <button
+                onClick={() => setShowSavedDesignsModal(true)}
+                className="px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-cyan-500/30 text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer"
+                title="Open Saved Topologies Library (persisted in cloud account & local storage)"
+              >
+                <Layers className="w-3 h-3 text-cyan-400" />
+                <span>My Designs</span>
+              </button>
+
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-white/[0.08] hover:text-white text-[10px] font-mono flex items-center gap-1 transition-colors cursor-pointer"
+                title="Open a local .json architecture file to immediately display the topology without manual construction"
+              >
+                <Upload className="w-3 h-3 text-cyan-400" />
+                <span>Open File</span>
+              </button>
+
+              {/* Quick Format Export Pills */}
+              <div className="hidden lg:flex items-center gap-1 pl-1">
+                <button
+                  onClick={handleQuickExportJson}
+                  className="p-1 rounded bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-cyan-300 border border-white/[0.06] transition-colors cursor-pointer"
+                  title="Quick Export: JSON Specification File (.adversim.json)"
+                >
+                  <FileCode className="w-3.5 h-3.5 text-cyan-400" />
+                </button>
+                <button
+                  onClick={handleQuickExportPng}
+                  className="p-1 rounded bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-emerald-300 border border-white/[0.06] transition-colors cursor-pointer"
+                  title="Quick Export: High-Resolution Screenshot Image (.png)"
+                >
+                  <ImageIcon className="w-3.5 h-3.5 text-emerald-400" />
+                </button>
+                <button
+                  onClick={handleQuickExportPdf}
+                  className="p-1 rounded bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-rose-300 border border-white/[0.06] transition-colors cursor-pointer"
+                  title="Quick Export: PDF Engineering Specification (.pdf)"
+                >
+                  <FileText className="w-3.5 h-3.5 text-rose-400" />
+                </button>
+              </div>
+            </div>
+
             {isFullscreen && (
               <button
                 onClick={scrollToFleet}
@@ -868,14 +1043,54 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({
         </div>
       </div>
 
-      {/* SVG Canvas Area */}
+      {/* SVG Canvas Area with Drag & Drop Import */}
       <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragOver(true);
+        }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDragOver(false);
+          const droppedFile = e.dataTransfer.files?.[0];
+          if (droppedFile) {
+            handleFileImport(droppedFile);
+          }
+        }}
         className={`w-full relative my-2 ${
           isFullscreen
             ? 'h-[560px] sm:h-[640px] min-h-[480px] flex-shrink-0'
             : 'flex-1 min-h-0 overflow-hidden'
         }`}
       >
+        {/* Drag & Drop Visual Overlay */}
+        {isDragOver && (
+          <div className="absolute inset-0 z-50 bg-cyan-950/85 border-2 border-dashed border-cyan-400 rounded-lg flex flex-col items-center justify-center gap-2 backdrop-blur-sm pointer-events-none">
+            <Upload className="w-10 h-10 text-cyan-400 animate-bounce" />
+            <span className="text-sm font-bold text-cyan-200 uppercase tracking-wider font-mono">
+              Drop Topology Architecture File (.json)
+            </span>
+            <span className="text-xs text-slate-400 font-mono">
+              Instantly loads complete node layout and link matrix without manual construction
+            </span>
+          </div>
+        )}
+
+        {/* Toast Notification Banner */}
+        {toastMessage && (
+          <div className="absolute top-3 right-3 z-40 bg-[#0f172a] border border-cyan-500/50 shadow-2xl rounded-xl px-3.5 py-2 flex items-center gap-2 text-xs text-slate-200 font-mono animate-fade-in backdrop-blur-md">
+            <CheckCircle2 className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+            <span>{toastMessage}</span>
+            <button
+              onClick={() => setToastMessage(null)}
+              className="text-slate-400 hover:text-white ml-2 p-0.5"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         <svg
           ref={svgRef}
           onWheel={handleSvgWheel}
@@ -1375,6 +1590,37 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({
           </div>
         </div>
       )}
+
+      {/* Save Topology Modal */}
+      <SaveTopologyModal
+        isOpen={showSaveModal}
+        onClose={() => setShowSaveModal(false)}
+        nodes={nodes}
+        edges={edges}
+        currentUser={currentUser || null}
+        svgElement={svgRef.current}
+        onSaved={(top) => {
+          setToastMessage(`Architecture "${top.name}" saved to your designs!`);
+          setTimeout(() => setToastMessage(null), 5000);
+        }}
+        onOpenAuthModal={onOpenAuthModal}
+      />
+
+      {/* Saved Topologies Management Modal */}
+      <SavedDesignsModal
+        isOpen={showSavedDesignsModal}
+        onClose={() => setShowSavedDesignsModal(false)}
+        currentUser={currentUser || null}
+        onLoadTopology={(top) => {
+          if (onLoadCustomTopology) {
+            onLoadCustomTopology(top);
+          }
+          setToastMessage(`Architecture "${top.name}" loaded (${top.nodes.length} nodes)`);
+          setTimeout(() => setToastMessage(null), 5000);
+        }}
+        onOpenSaveModal={() => setShowSaveModal(true)}
+        onOpenAuthModal={onOpenAuthModal}
+      />
     </div>
   );
 

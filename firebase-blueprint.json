@@ -44,12 +44,66 @@
         }
       },
       "required": ["uid", "name", "email", "role"]
+    },
+    "TopologyDesign": {
+      "title": "TopologyDesign",
+      "description": "Saved defensive network topology architecture created by an operator",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the topology design"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the creator"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable title of the network topology",
+          "maxLength": 120
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional engineering notes and architecture description",
+          "maxLength": 500
+        },
+        "version": {
+          "type": "string",
+          "description": "Specification version string"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last update"
+        },
+        "nodes": {
+          "type": "array",
+          "description": "List of network nodes comprising the topology"
+        },
+        "edges": {
+          "type": "array",
+          "description": "List of communication links interconnecting nodes"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Key telemetry counters and authorship attributes"
+        }
+      },
+      "required": ["id", "userId", "name", "nodes", "edges", "createdAt"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "UserProfile",
       "description": "Individual operator profile documents keyed strictly by Firebase Auth UID"
+    },
+    "/users/{userId}/topologies/{topologyId}": {
+      "schema": "TopologyDesign",
+      "description": "Operator saved defensive network topologies with complete nodes and routing architecture"
     }
   }
 }

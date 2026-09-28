@@ -146,3 +146,23 @@ export interface SimulationState {
   simMttdValues: { A: number; B: number; C: number; D: number; E: number };
   totalAlertCount: number;
 }
+
+export interface SavedTopology {
+  id: string;
+  userId?: string;
+  name: string;
+  description?: string;
+  version: string;
+  createdAt: string;
+  updatedAt?: string;
+  nodes: SimNode[];
+  edges: NetworkEdge[];
+  metadata?: {
+    authorName?: string;
+    authorEmail?: string;
+    nodeCount: number;
+    edgeCount: number;
+    honeypotCount: number;
+    presetSource?: string;
+  };
+}

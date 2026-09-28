@@ -20,7 +20,8 @@ import { ArchitectureBenchmark } from './components/ArchitectureBenchmark';
 import { LandingPage } from './components/LandingPage';
 import { AuthModal } from './components/AuthModal';
 import { authService, UserProfile } from './lib/authService';
-import { ConditionId, SimNode, NetworkEdge } from './types';
+import { topologyService } from './lib/topologyService';
+import { ConditionId, SimNode, NetworkEdge, SavedTopology } from './types';
 import { soundFx } from './utils/audio';
 import {
   Play,
@@ -62,9 +63,21 @@ export default function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
 
+  const previousUserIdRef = useRef<string | null>(currentUser?.id || null);
+
   // Listen to Firebase Auth state changes
   useEffect(() => {
+    topologyService.cleanupLegacyStorage();
     const unsubscribe = authService.onAuthChange((user) => {
+      const prevId = previousUserIdRef.current;
+      if (prevId && user && prevId !== user.id) {
+        // Logged in with a different user: reset simulation to default baseline enterprise architecture
+        handleLoadPreset('default-enterprise');
+      } else if (!user && prevId) {
+        // Logged out: reset simulation to default baseline enterprise architecture
+        handleLoadPreset('default-enterprise');
+      }
+      previousUserIdRef.current = user?.id || null;
       setCurrentUser(user);
     });
     return () => unsubscribe();
@@ -556,6 +569,54 @@ export default function App() {
     }
   };
 
+  const handleLoadCustomTopology = (topology: SavedTopology) => {
+    const freshNodes: SimNode[] = topology.nodes.map((n) => ({
+      ...n,
+      status: 'normal',
+      lastDetectedRound: undefined,
+      compromisedSurface: undefined,
+      bayesianWeights: { ...(n.bayesianWeights || n.defensiveAllocation) },
+      defensiveAllocation: { ...(n.defensiveAllocation || n.bayesianWeights) },
+      bayesianRisk: { ...n.bayesianRisk },
+    }));
+    const freshEdges: NetworkEdge[] = topology.edges.map((e) => ({ ...e }));
+
+    engine.setState({
+      currentRound: 0,
+      nodes: freshNodes,
+      edges: freshEdges,
+      alerts: [],
+      predictions: [],
+      rollingMttdBuffer: [],
+      attackStartRound: null,
+      totalAlertCount: 0,
+      simMttdValues: { A: 142.5, B: 88.3, C: 72.1, D: 64.8, E: 27.4 },
+      logs: [
+        `[SYSTEM] Architecture reconfigured to '${topology.name}'. Simulation baseline initialized at Round 0.`,
+        ...engine.getState().logs.slice(0, 99),
+      ],
+      mttdHistory: [
+        {
+          round: 0,
+          ConditionA: 142.5,
+          ConditionB: 88.3,
+          ConditionC: 72.1,
+          ConditionD: 64.8,
+          ConditionE: 27.4,
+          ConditionF: 36.8,
+        },
+      ],
+    });
+
+    setSelectedNodeId(freshNodes[0]?.id || null);
+    setSelectedPresetId(topology.id || 'custom');
+    setSimState({ ...engine.getState() });
+
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ action: 'reset' }));
+    }
+  };
+
   const selectedNode: SimNode | null =
     simState.nodes.find((n) => n.id === selectedNodeId) || simState.nodes[0] || null;
 
@@ -598,13 +659,21 @@ export default function App() {
   };
 
   const handleAuthSuccess = (user: UserProfile) => {
+    const prevId = previousUserIdRef.current;
+    if (prevId && prevId !== user.id) {
+      handleLoadPreset('default-enterprise');
+    }
+    previousUserIdRef.current = user.id;
     setCurrentUser(user);
     // User can either stay on landing or proceed to simulator
   };
 
-  const handleLogout = () => {
-    authService.logout();
+  const handleLogout = async () => {
+    await authService.logout();
     setCurrentUser(null);
+    previousUserIdRef.current = null;
+    topologyService.clearGuestTopologies();
+    handleLoadPreset('default-enterprise');
   };
 
   if (viewMode === 'landing') {
@@ -979,6 +1048,9 @@ export default function App() {
                 onDeleteEdge={handleDeleteEdge}
                 onMoveNode={handleMoveNode}
                 onLoadPreset={handleLoadPreset}
+                onLoadCustomTopology={handleLoadCustomTopology}
+                currentUser={currentUser}
+                onOpenAuthModal={() => handleOpenAuth('login')}
                 onInjectAttack={handleInjectAttack}
                 honeypotBroadcastActive={simState.nodes.some(n => n.isHoneypot && n.status === 'under_attack')}
                 onOpenScorecard={() => setActiveTab('audit')}
@@ -1074,6 +1146,14 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {/* Authentication Modal accessible across all views and modals */}
+      <AuthModal
+        isOpen={authModalOpen}
+        initialMode={authModalMode}
+        onClose={() => setAuthModalOpen(false)}
+        onAuthSuccess={handleAuthSuccess}
+      />
     </div>
   );
 }
