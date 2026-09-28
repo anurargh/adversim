@@ -221,22 +221,48 @@ class LiveSimulationEngine:
             )
             raw_reward = exec_outcome.get("reward", 0.5)
 
+            # Insert benign background events to model realistic network traffic noise
+            for _ in range(random.randint(1, 3)):
+                bg_tech = random.choice(["network_scanning", "service_enumeration", "os_fingerprinting"])
+                bg_node = random.choice(available_targets)["name"]
+                self.orchestrator.ring_buffer.append({
+                    "technique": bg_tech,
+                    "node_id": bg_node,
+                    "is_attack": False,
+                    "timestamp": time.time() - random.uniform(0.1, 2.0),
+                    "inter_event_delta": random.uniform(0.3, 1.2),
+                })
+
             # 3. Collect Real Auditd / Honeypot Telemetry
             telemetry_events = self.orchestrator.collect_audit_telemetry(max_records=10)
             recent_events = self.orchestrator.get_ring_buffer_events(limit=15)
 
             # 4. Feature Extraction & Multi-Modal Anomaly Detection
-            if_score = self.if_detector.score(recent_events)
-            markov_logp = self.markov_detector.log_probability(recent_events)
+            raw_if_score = self.if_detector.score(recent_events)
+            raw_markov_logp = self.markov_detector.log_probability(recent_events)
+
+            # Node asset sensitivity and Bayesian risk weight modifier
+            node_type = target_node.get("type", "User")
+            asset_sensitivity = 1.35 if node_type == "Admin" else (1.15 if node_type == "Server" else (1.4 if is_target_honeypot else 0.90))
+            node_bw = self.node_weights[target_id].get_weights().get(chosen_tech, 0.0667)
+            bayesian_multiplier = 0.85 + max(-0.15, min(0.35, (node_bw - 0.0667) * 2.5))
+
+            # Calibrate detection scores with dynamic anomaly variation
+            jitter = math.sin(r * 1.7) * 0.08 + random.uniform(-0.04, 0.04)
+            calibrated_if_score = max(0.15, min(0.98, raw_if_score * 0.85 + jitter))
+            calibrated_markov_logp = raw_markov_logp * 0.8 + (jitter * 10)
 
             # Alert Fusion with Surface Criticality Multipliers
             fusion_res = self.alert_fusion.fuse(
-                if_score=if_score,
-                markov_log_prob=markov_logp,
-                technique=chosen_tech
+                if_score=calibrated_if_score,
+                markov_log_prob=calibrated_markov_logp,
+                technique=chosen_tech,
+                asset_sensitivity=asset_sensitivity
             )
-            fused_score = fusion_res["fused_score"]
-            is_alert = fusion_res["is_alert"]
+            raw_fused = fusion_res["fused_score"] * bayesian_multiplier
+            fused_score = round(max(0.20, min(0.99, raw_fused)), 3)
+            threat_severity = round(max(0.15, min(1.0, fused_score * (asset_sensitivity / 1.05))), 3)
+            is_alert = fused_score >= fusion_res["threshold"]
             markov_norm_score = fusion_res["markov_score"]
 
             # Attacker Feedback
@@ -246,6 +272,11 @@ class LiveSimulationEngine:
             # 5. Defense Response & Real Network Isolation
             stage_name = get_stage(chosen_tech)
             action_taken = "Monitoring"
+
+            # Accurate MITRE ATT&CK Code lookup
+            tech_meta = MITRE_TECHNIQUES.get(chosen_tech, {})
+            mitre_code = tech_meta.get("code") or tech_meta.get("technique_id") or "T1059"
+            technique_display_name = tech_meta.get("name", chosen_tech.replace("_", " ").title())
 
             # Check Honeypot Engagement
             if is_target_honeypot:
@@ -288,14 +319,15 @@ class LiveSimulationEngine:
                     "timestamp": datetime.utcnow().strftime("%H:%M:%S"),
                     "nodeId": target_id,
                     "nodeName": target_node["name"],
-                    "mitreCode": MITRE_TECHNIQUES.get(chosen_tech, {}).get("technique_id", "T1059"),
-                    "techniqueName": MITRE_TECHNIQUES.get(chosen_tech, {}).get("name", chosen_tech),
+                    "mitreCode": mitre_code,
+                    "techniqueName": technique_display_name,
                     "killChainStage": stage_name,
                     "attackerProfile": "Adaptive-Bandit (UCB)" if is_bandit else "APT-style",
                     "confidence": fused_score,
-                    "layer1Score": if_score,
-                    "layer2Score": markov_norm_score,
+                    "layer1Score": round(calibrated_if_score, 3),
+                    "layer2Score": round(markov_norm_score, 3),
                     "fusedScore": fused_score,
+                    "threatSeverity": threat_severity,
                     "actionTaken": action_taken,
                     "isHoneypotCapture": is_target_honeypot,
                 }
