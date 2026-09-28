@@ -1,6 +1,7 @@
 import express from 'express';
 import http from 'http';
 import path from 'path';
+import fs from 'fs';
 import { spawn, ChildProcess } from 'child_process';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer as createViteServer } from 'vite';
@@ -215,10 +216,27 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    const indexPath = path.join(distPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      app.use(express.static(distPath));
+      app.get('*', (req, res) => {
+        res.sendFile(indexPath);
+      });
+    } else {
+      // Backend-only mode (e.g. Render Web Service without separate build step)
+      app.get('/', (req, res) => {
+        res.json({
+          status: 'online',
+          service: 'AdverSim Cyber-Range Backend Orchestrator',
+          endpoints: {
+            health: '/api/health',
+            state: '/api/sim/state',
+            websocket: '/ws',
+          },
+          note: 'Frontend static build (dist) not present. Running in pure backend mode.',
+        });
+      });
+    }
   }
 
   server.listen(PORT, '0.0.0.0', () => {

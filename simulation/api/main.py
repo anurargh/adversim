@@ -199,8 +199,12 @@ class LiveApiRequestHandler(BaseHTTPRequestHandler):
     """
 
     def log_message(self, format, *args):
-        # Suppress noisy healthcheck logs
-        if "GET /api/health" not in (args[0] if args else ""):
+        # Suppress noisy healthcheck logs safely
+        try:
+            msg = format % args if args else format
+            if "GET /api/health" not in str(msg):
+                pass
+        except Exception:
             pass
 
     def do_OPTIONS(self):

@@ -135,6 +135,10 @@ class ConsistencyChecker:
         self.update_history(sequence)
         return True, reason
 
+    def validate_sequence(self, sequence: List[Union[str, Dict[str, Any]]]) -> Tuple[bool, str]:
+        """Alias for check() method."""
+        return self.check(sequence)
+
 
 if __name__ == "__main__":
     print("[TEST] Testing ConsistencyChecker...")
